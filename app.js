@@ -241,17 +241,7 @@ function updateMapForSelectedCar() {
     })
       .addTo(map)
       .bindPopup(`${escapeHtml(car.name)}<br>${formatSpotShort(car.spot)}`);
-    spotMarker.on("dragstart", () => {
-      setStatus("Mueve el pin y sueltalo para ajustar el spot.");
-    });
-    spotMarker.on("dragend", async (event) => {
-      const position = event.target.getLatLng();
-      await saveSpotForCar(car, {
-        lat: position.lat,
-        lng: position.lng,
-        accuracy: car.spot?.accuracy || 20,
-      });
-    });
+    setupProtectedPinDrag(spotMarker, car);
     accuracyCircle = L.circle(point, {
       radius: car.spot.accuracy || 20,
       color: pinColor,
@@ -354,10 +344,109 @@ function createPinIcon(color) {
   const safeColor = isValidColor(color) ? color : DEFAULT_PIN_COLOR;
   return L.divIcon({
     className: "parking-pin",
-    html: `<svg viewBox="0 0 36 48" aria-hidden="true"><path fill="${safeColor}" d="M18 47S4 31.5 4 18a14 14 0 1 1 28 0c0 13.5-14 29-14 29Z"/><circle cx="18" cy="18" r="6" fill="#fff"/></svg>`,
-    iconSize: [36, 48],
-    iconAnchor: [18, 46],
-    popupAnchor: [0, -44],
+    html: `<svg viewBox="0 0 36 52" aria-hidden="true"><path fill="${safeColor}" d="M18 47S4 31.5 4 18a14 14 0 1 1 28 0c0 13.5-14 29-14 29Z"/><circle cx="18" cy="18" r="6" fill="#fff"/><circle class="pin-drag-dot" cx="18" cy="47" r="4"/></svg>`,
+    iconSize: [36, 52],
+    iconAnchor: [18, 48],
+    popupAnchor: [0, -46],
+  });
+}
+
+function setupProtectedPinDrag(marker, car) {
+  let pressTimer = null;
+  let dragArmed = false;
+  let blockedDrag = false;
+  let isDragging = false;
+  let originalPosition = marker.getLatLng();
+  const element = marker.getElement();
+
+  const clearPressTimer = () => {
+    if (pressTimer) {
+      window.clearTimeout(pressTimer);
+      pressTimer = null;
+    }
+  };
+
+  const setPinStateClasses = ({ pressing = false, unlocked = false }) => {
+    element?.classList.toggle("pressing", pressing);
+    element?.classList.toggle("unlocked", unlocked);
+  };
+
+  const resetDragState = () => {
+    clearPressTimer();
+    dragArmed = false;
+    blockedDrag = false;
+    isDragging = false;
+    setPinStateClasses({});
+  };
+
+  const startPress = (event) => {
+    if (spotBusy) {
+      return;
+    }
+
+    L.DomEvent.stopPropagation(event);
+    clearPressTimer();
+    dragArmed = false;
+    blockedDrag = false;
+    isDragging = false;
+    originalPosition = marker.getLatLng();
+    setPinStateClasses({ pressing: true });
+    setStatus("Manten el pin 2 segundos para moverlo.");
+
+    pressTimer = window.setTimeout(() => {
+      dragArmed = true;
+      setPinStateClasses({ unlocked: true });
+      if (navigator.vibrate) {
+        navigator.vibrate(80);
+      }
+      setStatus("Pin desbloqueado. Arrastralo para ajustar el spot.", "success");
+    }, 2000);
+  };
+
+  const endPress = () => {
+    if (!isDragging) {
+      resetDragState();
+    }
+  };
+
+  if (element) {
+    L.DomEvent.disableClickPropagation(element);
+    L.DomEvent.on(element, "mousedown", startPress);
+    L.DomEvent.on(element, "touchstart", startPress);
+    element.addEventListener("pointerdown", startPress, { passive: false });
+    element.addEventListener("pointerup", endPress);
+    element.addEventListener("pointercancel", endPress);
+    element.addEventListener("touchend", endPress);
+    element.addEventListener("touchcancel", endPress);
+    element.addEventListener("mouseleave", endPress);
+  }
+
+  marker.on("dragstart", () => {
+    clearPressTimer();
+    isDragging = true;
+    blockedDrag = !dragArmed;
+    if (blockedDrag) {
+      setStatus("Manten el pin 2 segundos antes de moverlo.", "error");
+    } else {
+      setStatus("Mueve el pin y sueltalo para ajustar el spot.");
+    }
+  });
+
+  marker.on("dragend", async (event) => {
+    isDragging = false;
+    if (blockedDrag || !dragArmed) {
+      marker.setLatLng(originalPosition);
+      resetDragState();
+      return;
+    }
+
+    const position = event.target.getLatLng();
+    resetDragState();
+    await saveSpotForCar(car, {
+      lat: position.lat,
+      lng: position.lng,
+      accuracy: car.spot?.accuracy || 20,
+    });
   });
 }
 
@@ -455,7 +544,7 @@ function openSelectedCarInMaps() {
   }
 
   const destination = `${car.spot.lat},${car.spot.lng}`;
-  const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}`;
+  const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destination)}&travelmode=walking`;
   window.open(url, "_blank", "noopener,noreferrer");
   setStatus(`Abriendo Maps para ${car.name}.`, "success");
 }

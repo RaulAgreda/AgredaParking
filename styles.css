@@ -728,14 +728,38 @@ svg {
 .parking-pin {
   background: transparent;
   border: 0;
+  touch-action: none;
+  user-select: none;
 }
 
 .parking-pin svg {
   width: 36px;
-  height: 48px;
+  height: 52px;
   display: block;
   filter: drop-shadow(0 4px 8px rgba(18, 31, 43, 0.24));
   stroke: none;
+  transform-origin: 50% 95%;
+  transition:
+    filter 0.18s ease,
+    transform 0.18s ease;
+}
+
+.parking-pin.pressing svg,
+.parking-pin.unlocked svg {
+  filter: drop-shadow(0 0 0 rgba(255, 255, 255, 0.95)) drop-shadow(0 6px 14px rgba(18, 31, 43, 0.35));
+  transform: scale(1.14) translateY(-2px);
+}
+
+.parking-pin .pin-drag-dot {
+  fill: var(--blue);
+  opacity: 0;
+  stroke: #fff;
+  stroke-width: 2;
+  transition: opacity 0.18s ease;
+}
+
+.parking-pin.unlocked .pin-drag-dot {
+  opacity: 1;
 }
 
 .status-bar,
