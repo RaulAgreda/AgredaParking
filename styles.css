@@ -839,6 +839,8 @@ svg {
   .tool-button {
     min-height: 62px;
     grid-template-columns: 36px 1fr;
+    align-content: center;
+    align-items: center;
     justify-items: start;
     text-align: left;
   }
