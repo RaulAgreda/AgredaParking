@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agreda Parking</title>
+    <link rel="preconnect" href="https://unpkg.com" />
+    <link rel="preconnect" href="https://a.basemaps.cartocdn.com" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="login-view" id="loginView" aria-labelledby="loginTitle">
+        <div class="login-panel">
+          <div class="brand-block">
+            <span class="brand-mark" aria-hidden="true">P</span>
+            <div>
+              <p class="eyebrow">Agreda Parking</p>
+              <h1 id="loginTitle">Encuentra tu coche sin vueltas</h1>
+            </div>
+          </div>
+
+          <form class="login-form" id="loginForm">
+            <label for="usernameInput">Nombre de usuario</label>
+            <input
+              id="usernameInput"
+              name="username"
+              type="text"
+              autocomplete="username"
+              required
+              placeholder="Tu nombre"
+            />
+
+            <label for="passwordInput">Contrasena</label>
+            <input
+              id="passwordInput"
+              name="password"
+              type="password"
+              autocomplete="current-password"
+              minlength="4"
+              required
+              placeholder="Minimo 4 caracteres"
+            />
+
+            <div class="login-actions">
+              <button class="primary-action" type="submit">Entrar</button>
+              <button class="secondary-action" id="signupButton" type="button">Crear cuenta</button>
+            </div>
+            <p class="form-note" id="loginNote">Tu cuenta guarda coches y ubicaciones en la base de datos.</p>
+          </form>
+        </div>
+      </section>
+
+      <section class="dashboard-view hidden" id="dashboardView" aria-label="Panel de parking">
+        <header class="topbar">
+          <div>
+            <p class="eyebrow">Parking activo</p>
+            <h1>Mis coches</h1>
+          </div>
+          <div class="topbar-actions">
+            <span class="session-user" id="sessionUser"></span>
+            <button class="icon-button" id="logoutButton" type="button" aria-label="Cerrar sesion" title="Cerrar sesion">
+              <svg aria-hidden="true" viewBox="0 0 24 24">
+                <path d="M10 17l5-5-5-5" />
+                <path d="M15 12H3" />
+                <path d="M21 19V5a2 2 0 0 0-2-2h-6" />
+              </svg>
+            </button>
+          </div>
+        </header>
+
+        <div class="workspace">
+          <aside class="side-panel" aria-label="Gestion de coches">
+            <div class="actions-grid" aria-label="Acciones principales">
+              <button class="tool-button" id="saveSpotButton" type="button">
+                <span class="tool-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M12 21s7-5.2 7-12a7 7 0 0 0-14 0c0 6.8 7 12 7 12Z" />
+                    <circle cx="12" cy="9" r="2.5" />
+                  </svg>
+                </span>
+                Guardar spot
+              </button>
+
+              <button class="tool-button accent" id="findCarButton" type="button">
+                <span class="tool-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M8 18h8" />
+                    <path d="M9 18v2" />
+                    <path d="M15 18v2" />
+                    <path d="M4 14l1.4-5A3 3 0 0 1 8.3 7h7.4a3 3 0 0 1 2.9 2l1.4 5" />
+                    <path d="M5 14h14v4H5z" />
+                    <path d="M7.5 14v-2" />
+                    <path d="M16.5 14v-2" />
+                    <path d="M13 4l3 3-3 3" />
+                  </svg>
+                </span>
+                Encontrar
+              </button>
+            </div>
+
+            <form class="car-form hidden" id="carForm">
+              <div class="car-form-header">
+                <h2 id="carFormTitle">Anadir coche</h2>
+                <button class="danger-link hidden" id="deleteCarButton" type="button">Borrar</button>
+              </div>
+              <div class="form-row">
+                <label for="carNameInput">Nombre del coche</label>
+                <input id="carNameInput" name="carName" type="text" maxlength="32" placeholder="Ej. Coche rojo" />
+              </div>
+              <div class="form-row">
+                <label for="carImageInput">Imagen</label>
+                <input id="carImageInput" name="carImage" type="file" accept="image/*" />
+              </div>
+              <div class="form-row">
+                <label for="pinColorInput">Color del pin</label>
+                <div class="color-field">
+                  <input id="pinColorInput" name="pinColor" type="color" value="#0f766e" />
+                  <span id="pinColorValue">#0f766e</span>
+                </div>
+              </div>
+              <div class="form-actions">
+                <button class="secondary-action" id="cancelCarButton" type="button">Cancelar</button>
+                <button class="primary-action compact" type="submit">Guardar</button>
+              </div>
+            </form>
+
+            <div class="cars-header">
+              <h2>Coches</h2>
+              <div class="cars-header-actions">
+                <span id="carCount">0</span>
+                <button class="small-icon-button" id="editCarButton" type="button" aria-label="Editar coche" title="Editar coche">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M12 20h9" />
+                    <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z" />
+                  </svg>
+                </button>
+                <button class="small-icon-button add" id="addCarButton" type="button" aria-label="Anadir coche" title="Anadir coche">
+                  <svg aria-hidden="true" viewBox="0 0 24 24">
+                    <path d="M12 5v14" />
+                    <path d="M5 12h14" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="cars-list" id="carsList"></div>
+          </aside>
+
+          <section class="map-area" aria-label="Mapa de parking">
+            <div class="status-bar" id="statusBar">Selecciona un coche para guardar o abrir su ubicacion.</div>
+            <div id="map" class="map"></div>
+            <div class="spot-panel" id="spotPanel">
+              <div>
+                <p class="eyebrow">Spot seleccionado</p>
+                <strong id="selectedCarName">Sin coche seleccionado</strong>
+              </div>
+              <p id="spotDetails">Todavia no hay coordenadas guardadas.</p>
+            </div>
+          </section>
+        </div>
+      </section>
+    </main>
+
+    <template id="carCardTemplate">
+      <button class="car-card" type="button">
+        <span class="car-image-wrap">
+          <img class="car-image" alt="" />
+          <span class="fallback-car" aria-hidden="true">
+            <svg viewBox="0 0 96 64">
+              <path d="M12 42h72l-7-18c-2-5-6-8-11-8H34c-5 0-9 3-11 8l-4 10h-7a4 4 0 0 0 0 8Z" />
+              <circle cx="28" cy="45" r="7" />
+              <circle cx="68" cy="45" r="7" />
+              <path d="M31 24h34l5 13H25l6-13Z" />
+            </svg>
+          </span>
+        </span>
+        <span class="car-info">
+          <span class="car-name"></span>
+          <span class="car-spot"></span>
+        </span>
+        <span class="pin-swatch" aria-hidden="true"></span>
+      </button>
+    </template>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script src="app.js"></script>
+  </body>
+</html>
