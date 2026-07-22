@@ -19,7 +19,7 @@ La API crea automaticamente las tablas `users` y `cars` la primera vez que se us
 
 ```powershell
 npm install
-npm run dev
+npm run vercel:dev
 ```
 
 Abre la URL que muestre Vercel CLI.

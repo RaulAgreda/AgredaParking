@@ -8,6 +8,8 @@
   --line: #d9e0e7;
   --primary: #0f766e;
   --primary-dark: #0b5d56;
+  --blue: #2563eb;
+  --blue-dark: #1d4ed8;
   --accent: #b42318;
   --accent-dark: #8f1d14;
   --focus: rgba(15, 118, 110, 0.24);
@@ -39,6 +41,12 @@ input {
 
 button {
   cursor: pointer;
+}
+
+button:disabled,
+input:disabled {
+  cursor: not-allowed;
+  opacity: 0.68;
 }
 
 .hidden {
@@ -323,13 +331,24 @@ svg {
   background: #e6f3f1;
 }
 
-.tool-button.accent {
-  color: var(--accent);
+.tool-button.save {
+  background: var(--primary);
+  color: #fff;
 }
 
-.tool-button.accent:hover {
-  background: #fff0ee;
-  color: var(--accent-dark);
+.tool-button.save:hover {
+  background: var(--primary-dark);
+  color: #fff;
+}
+
+.tool-button.find {
+  background: var(--blue);
+  color: #fff;
+}
+
+.tool-button.find:hover {
+  background: var(--blue-dark);
+  color: #fff;
 }
 
 .tool-icon {
@@ -662,6 +681,11 @@ svg {
   overflow: hidden;
   background: #fff;
   box-shadow: 0 6px 18px rgba(18, 31, 43, 0.16);
+}
+
+.leaflet-bottom .leaflet-control-zoom {
+  margin-right: 16px;
+  margin-bottom: 96px;
 }
 
 .leaflet-control-zoom a {

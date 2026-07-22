@@ -3,13 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "vercel dev",
+    "vercel:dev": "vercel dev",
     "check": "node --check app.js && node --check api/_lib.js && node --check api/signup.js && node --check api/login.js && node --check api/me.js && node --check api/logout.js && node --check api/cars.js"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.1"
   },
   "devDependencies": {
-    "vercel": "^44.7.3"
+    "vercel": "^56.5.0"
   }
 }

@@ -5,6 +5,7 @@ const DEFAULT_PIN_COLOR = "#0f766e";
 const loginView = document.querySelector("#loginView");
 const dashboardView = document.querySelector("#dashboardView");
 const loginForm = document.querySelector("#loginForm");
+const loginButton = document.querySelector("#loginButton");
 const signupButton = document.querySelector("#signupButton");
 const loginNote = document.querySelector("#loginNote");
 const usernameInput = document.querySelector("#usernameInput");
@@ -14,7 +15,9 @@ const logoutButton = document.querySelector("#logoutButton");
 const addCarButton = document.querySelector("#addCarButton");
 const editCarButton = document.querySelector("#editCarButton");
 const saveSpotButton = document.querySelector("#saveSpotButton");
+const saveSpotButtonText = document.querySelector("#saveSpotButtonText");
 const findCarButton = document.querySelector("#findCarButton");
+const findCarButtonText = document.querySelector("#findCarButtonText");
 const carForm = document.querySelector("#carForm");
 const carFormTitle = document.querySelector("#carFormTitle");
 const carNameInput = document.querySelector("#carNameInput");
@@ -22,6 +25,7 @@ const carImageInput = document.querySelector("#carImageInput");
 const pinColorInput = document.querySelector("#pinColorInput");
 const pinColorValue = document.querySelector("#pinColorValue");
 const cancelCarButton = document.querySelector("#cancelCarButton");
+const saveCarButton = document.querySelector("#saveCarButton");
 const deleteCarButton = document.querySelector("#deleteCarButton");
 const carsList = document.querySelector("#carsList");
 const carCount = document.querySelector("#carCount");
@@ -34,6 +38,9 @@ let map;
 let spotMarker;
 let accuracyCircle;
 let editingCarId = null;
+let authBusy = false;
+let carBusy = false;
+let spotBusy = false;
 
 const state = {
   user: null,
@@ -133,8 +140,10 @@ function initMap() {
   }
 
   map = L.map("map", {
-    zoomControl: true,
+    zoomControl: false,
   }).setView(DEFAULT_CENTER, 13);
+
+  L.control.zoom({ position: "bottomright" }).addTo(map);
 
   L.tileLayer("https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png", {
     attribution:
@@ -202,6 +211,7 @@ function renderCars() {
   });
 
   updateSelectedInfo();
+  updateActionAvailability();
 }
 
 function updateSelectedInfo() {
@@ -225,9 +235,23 @@ function updateMapForSelectedCar() {
   if (car?.spot) {
     const point = [car.spot.lat, car.spot.lng];
     const pinColor = car.pinColor || DEFAULT_PIN_COLOR;
-    spotMarker = L.marker(point, { icon: createPinIcon(pinColor) })
+    spotMarker = L.marker(point, {
+      draggable: true,
+      icon: createPinIcon(pinColor),
+    })
       .addTo(map)
       .bindPopup(`${escapeHtml(car.name)}<br>${formatSpotShort(car.spot)}`);
+    spotMarker.on("dragstart", () => {
+      setStatus("Mueve el pin y sueltalo para ajustar el spot.");
+    });
+    spotMarker.on("dragend", async (event) => {
+      const position = event.target.getLatLng();
+      await saveSpotForCar(car, {
+        lat: position.lat,
+        lng: position.lng,
+        accuracy: car.spot?.accuracy || 20,
+      });
+    });
     accuracyCircle = L.circle(point, {
       radius: car.spot.accuracy || 20,
       color: pinColor,
@@ -266,6 +290,39 @@ function setStatus(message, type = "") {
   if (type) {
     statusBar.classList.add(type);
   }
+}
+
+function setButtonBusy(button, isBusy, busyText) {
+  if (!button) {
+    return;
+  }
+
+  if (isBusy) {
+    if (!button.dataset.idleHtml) {
+      button.dataset.idleHtml = button.innerHTML;
+    }
+    button.textContent = busyText;
+    button.disabled = true;
+    button.setAttribute("aria-busy", "true");
+    return;
+  }
+
+  button.innerHTML = button.dataset.idleHtml || button.innerHTML;
+  delete button.dataset.idleHtml;
+  button.disabled = false;
+  button.removeAttribute("aria-busy");
+}
+
+function updateActionAvailability() {
+  const car = getSelectedCar();
+  const hasCar = Boolean(car);
+  const hasSpot = Boolean(car?.spot);
+  saveSpotButton.disabled = spotBusy || !hasCar;
+  saveSpotButtonText.textContent = spotBusy ? "Guardando..." : "Guardar spot";
+  findCarButton.disabled = spotBusy || !hasSpot;
+  findCarButtonText.textContent = spotBusy ? "Guardando..." : hasSpot ? "Encontrar" : "Sin spot";
+  editCarButton.disabled = carBusy || !hasCar;
+  addCarButton.disabled = carBusy;
 }
 
 function formatSpotShort(spot) {
@@ -319,6 +376,10 @@ function readImageAsDataUrl(file) {
 }
 
 async function saveCurrentLocation() {
+  if (spotBusy) {
+    return;
+  }
+
   const car = getSelectedCar();
   if (!car) {
     setStatus("Anade o selecciona un coche antes de guardar el spot.", "error");
@@ -330,26 +391,17 @@ async function saveCurrentLocation() {
     return;
   }
 
+  spotBusy = true;
+  updateActionAvailability();
+  saveSpotButtonText.textContent = "Localizando...";
   setStatus("Obteniendo ubicacion GPS...");
   navigator.geolocation.getCurrentPosition(
     async (position) => {
-      try {
-        const spot = {
-          lat: position.coords.latitude,
-          lng: position.coords.longitude,
-          accuracy: Math.round(position.coords.accuracy || 20),
-        };
-        const data = await apiRequest("/api/cars", {
-          method: "PATCH",
-          body: JSON.stringify({ id: car.id, action: "spot", spot }),
-        });
-        replaceCar(data.car);
-        renderCars();
-        updateMapForSelectedCar();
-        setStatus(`Spot guardado para ${data.car.name}.`, "success");
-      } catch (error) {
-        setStatus(error.message, "error");
-      }
+      await saveSpotForCar(car, {
+        lat: position.coords.latitude,
+        lng: position.coords.longitude,
+        accuracy: Math.round(position.coords.accuracy || 20),
+      });
     },
     (error) => {
       const message =
@@ -357,6 +409,8 @@ async function saveCurrentLocation() {
           ? "Permite el acceso a la ubicacion para guardar el spot."
           : "No se pudo obtener la ubicacion GPS. Intentalo de nuevo.";
       setStatus(message, "error");
+      spotBusy = false;
+      updateActionAvailability();
     },
     {
       enableHighAccuracy: true,
@@ -364,6 +418,28 @@ async function saveCurrentLocation() {
       maximumAge: 0,
     },
   );
+}
+
+async function saveSpotForCar(car, spot) {
+  try {
+    spotBusy = true;
+    updateActionAvailability();
+    setStatus("Guardando spot...");
+    const data = await apiRequest("/api/cars", {
+      method: "PATCH",
+      body: JSON.stringify({ id: car.id, action: "spot", spot }),
+    });
+    replaceCar(data.car);
+    renderCars();
+    updateMapForSelectedCar();
+    setStatus(`Spot guardado para ${data.car.name}.`, "success");
+  } catch (error) {
+    setStatus(error.message, "error");
+    updateMapForSelectedCar();
+  } finally {
+    spotBusy = false;
+    updateActionAvailability();
+  }
 }
 
 function openSelectedCarInMaps() {
@@ -419,6 +495,10 @@ function closeCarForm() {
 }
 
 async function submitAuth(path) {
+  if (authBusy) {
+    return;
+  }
+
   const username = usernameInput.value.trim();
   const password = passwordInput.value;
   if (!username || !password) {
@@ -427,6 +507,13 @@ async function submitAuth(path) {
   }
 
   try {
+    authBusy = true;
+    const isSignup = path.includes("signup");
+    setButtonBusy(loginButton, true, isSignup ? "Esperando..." : "Entrando...");
+    setButtonBusy(signupButton, true, isSignup ? "Creando..." : "Esperando...");
+    usernameInput.disabled = true;
+    passwordInput.disabled = true;
+    setLoginMessage(isSignup ? "Creando cuenta..." : "Iniciando sesion...");
     const data = await apiRequest(path, {
       method: "POST",
       body: JSON.stringify({ username, password }),
@@ -438,6 +525,12 @@ async function submitAuth(path) {
     setStatus(`Sesion iniciada como ${data.user.username}.`, "success");
   } catch (error) {
     setLoginMessage(error.message);
+  } finally {
+    authBusy = false;
+    setButtonBusy(loginButton, false);
+    setButtonBusy(signupButton, false);
+    usernameInput.disabled = false;
+    passwordInput.disabled = false;
   }
 }
 
@@ -455,6 +548,8 @@ signupButton.addEventListener("click", () => {
 });
 
 logoutButton.addEventListener("click", async () => {
+  logoutButton.disabled = true;
+  logoutButton.setAttribute("aria-busy", "true");
   try {
     await apiRequest("/api/logout", { method: "POST", body: "{}" });
   } catch {
@@ -465,6 +560,8 @@ logoutButton.addEventListener("click", async () => {
   state.selectedCarId = null;
   saveUiState();
   passwordInput.value = "";
+  logoutButton.disabled = false;
+  logoutButton.removeAttribute("aria-busy");
   showLogin();
 });
 
@@ -486,6 +583,10 @@ cancelCarButton.addEventListener("click", () => {
 
 carForm.addEventListener("submit", async (event) => {
   event.preventDefault();
+  if (carBusy) {
+    return;
+  }
+
   const name = carNameInput.value.trim() || `Coche ${state.cars.length + 1}`;
   const image = await readImageAsDataUrl(carImageInput.files?.[0]);
   const pinColor = isValidColor(pinColorInput.value) ? pinColorInput.value : DEFAULT_PIN_COLOR;
@@ -494,6 +595,12 @@ carForm.addEventListener("submit", async (event) => {
     : { name, image, pinColor };
 
   try {
+    carBusy = true;
+    updateActionAvailability();
+    setButtonBusy(saveCarButton, true, "Guardando...");
+    setButtonBusy(cancelCarButton, true, "Espera...");
+    deleteCarButton.disabled = true;
+    setStatus("Guardando coche...");
     const data = await apiRequest("/api/cars", {
       method: editingCarId ? "PATCH" : "POST",
       body: JSON.stringify(body),
@@ -505,10 +612,20 @@ carForm.addEventListener("submit", async (event) => {
     setStatus(`${data.car.name} guardado.`, "success");
   } catch (error) {
     setStatus(error.message, "error");
+  } finally {
+    carBusy = false;
+    setButtonBusy(saveCarButton, false);
+    setButtonBusy(cancelCarButton, false);
+    deleteCarButton.disabled = false;
+    updateActionAvailability();
   }
 });
 
 deleteCarButton.addEventListener("click", async () => {
+  if (carBusy) {
+    return;
+  }
+
   const car = editingCarId ? state.cars.find((item) => item.id === editingCarId) : null;
   if (!car) {
     return;
@@ -520,6 +637,12 @@ deleteCarButton.addEventListener("click", async () => {
   }
 
   try {
+    carBusy = true;
+    updateActionAvailability();
+    setButtonBusy(deleteCarButton, true, "Borrando...");
+    setButtonBusy(saveCarButton, true, "Espera...");
+    setButtonBusy(cancelCarButton, true, "Espera...");
+    setStatus("Borrando coche...");
     await apiRequest(`/api/cars?id=${encodeURIComponent(car.id)}`, {
       method: "DELETE",
       body: "{}",
@@ -533,6 +656,12 @@ deleteCarButton.addEventListener("click", async () => {
     setStatus(`${car.name} borrado.`, "success");
   } catch (error) {
     setStatus(error.message, "error");
+  } finally {
+    carBusy = false;
+    setButtonBusy(deleteCarButton, false);
+    setButtonBusy(saveCarButton, false);
+    setButtonBusy(cancelCarButton, false);
+    updateActionAvailability();
   }
 });
 
